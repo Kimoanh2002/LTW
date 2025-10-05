@@ -1,15 +1,28 @@
-# Sử dụng image Tomcat chính thức với JDK 17 để phù hợp với yêu cầu dự án
-FROM tomcat:10.1-jdk17
+# ---------- Stage 1: Build WAR từ source ----------
+FROM maven:3.9-eclipse-temurin-17 AS builder
+WORKDIR /app
 
-# Xóa các ứng dụng mặc định của Tomcat để tránh xung đột
+# Copy pom.xml và tải dependencies để cache
+COPY pom.xml .
+RUN mvn dependency:go-offline
+
+# Copy toàn bộ source code
+COPY . .
+
+# Build WAR
+RUN mvn clean package -DskipTests
+
+# ---------- Stage 2: Tomcat chạy WAR ----------
+FROM tomcat:10.1.44-jdk17-temurin
+
+# Xóa webapps mặc định
 RUN rm -rf /usr/local/tomcat/webapps/*
 
-# Sao chép file WAR từ thư mục target của dự án vào thư mục webapps của Tomcat
-# Đổi tên file WAR thành bt2.war để dễ truy cập tại đường dẫn gốc (/bt2/)
-COPY target/bt2-1.0-SNAPSHOT.war /usr/local/tomcat/webapps/bt2.war
+# Copy WAR vừa build vào ROOT.war để chạy ở "/"
+COPY --from=builder /app/target/*.war /usr/local/tomcat/webapps/ROOT.war
 
-# Mở cổng 8080 để ứng dụng có thể truy cập từ bên ngoài
+# Expose cổng 8080
 EXPOSE 8080
 
-# Lệnh chạy Tomcat khi container khởi động
+# Start Tomcat
 CMD ["catalina.sh", "run"]
